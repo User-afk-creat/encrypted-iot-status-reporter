@@ -222,40 +222,37 @@ The Terminal widget on V3 acts as a live serial-style log inside the Blynk dashb
 ---
 ## Simulate an alert
 ```
-  void loop() {
+void loop() {
   Blynk.run();
 
   unsigned long uptimeSec = millis() / 1000;
-  String data    = "System_Status_OK_Time_" + String(millis());
-  String hmacHex = computeHMAC(data);
-  // --- SIMULATED ATTACK START ---
-  // We change the message to "CRITICAL", but we don't update hmacHex.
-  // This simulates an attacker changing the payload in transit.
-  data = "System_Status_CRITICAL_Time_" + String(millis()); 
-  // --- SIMULATED ATTACK END ---
-  // Notification: alert on unexpected HMAC change
-  if (lastHash != "" && hmacHex != lastHash && !notifSent) {
-    Blynk.logEvent("hmac_change", "ALERT: HMAC changed unexpectedly!");
-    terminal.println("[CRITICAL] HMAC mismatch detected!");
-    terminal.flush();
-    Blynk.virtualWrite(V4, 1); // This turns the '0' into a '1' on your screen
-    notifSent = true;
+  
+  // 1. Create original data and its AUTHENTIC hash
+  String originalData = "System_Status_OK_Time_" + String(millis());
+  String authorizedHash = computeHMAC(originalData);
+
+  // 2. SIMULATE ATTACK: Change the message, but keep the OLD hash
+  String tamperedData = "System_Status_CRITICAL_Time_" + String(millis()); 
+
+  // 3. THE VERIFICATION (This is what your NIDS would do)
+  // Check if the hash of what we are sending matches the hash we calculated
+  String currentActualHash = computeHMAC(tamperedData);
+
+  if (currentActualHash != authorizedHash) {
+    // This is a TRUE detection: The data and the hash don't match!
+    Blynk.logEvent("hmac_change", "ALERT: Data Integrity Compromised!");
+    Blynk.virtualWrite(V4, 1);
+    terminal.println("[CRITICAL] HMAC Mismatch! Data was altered.");
   } else {
     Blynk.virtualWrite(V4, 0);
-    notifSent = false;
   }
-  lastHash = hmacHex;
 
-  // Publish to Blynk
-  Blynk.virtualWrite(V0, data);
-  Blynk.virtualWrite(V1, hmacHex);
-  Blynk.virtualWrite(V2, uptimeSec);   // Automation watches this
+  // Send the "Tampered" data and the "Old" hash to Blynk to show the failure
+  Blynk.virtualWrite(V0, tamperedData);
+  Blynk.virtualWrite(V1, authorizedHash);
+  Blynk.virtualWrite(V2, uptimeSec);
 
-  // Terminal log
-  terminal.print("[" + String(uptimeSec) + "s] ");
-  terminal.println(hmacHex.substring(0, 16) + "...");
   terminal.flush();
-
   delay(5000);
-}```
+}
 

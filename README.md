@@ -221,9 +221,41 @@ The Terminal widget on V3 acts as a live serial-style log inside the Blynk dashb
 
 ---
 ## Simulate an alert
+```
+  void loop() {
+  Blynk.run();
+
+  unsigned long uptimeSec = millis() / 1000;
+  String data    = "System_Status_OK_Time_" + String(millis());
+  String hmacHex = computeHMAC(data);
   // --- SIMULATED ATTACK START ---
   // We change the message to "CRITICAL", but we don't update hmacHex.
   // This simulates an attacker changing the payload in transit.
   data = "System_Status_CRITICAL_Time_" + String(millis()); 
   // --- SIMULATED ATTACK END ---
+  // Notification: alert on unexpected HMAC change
+  if (lastHash != "" && hmacHex != lastHash && !notifSent) {
+    Blynk.logEvent("hmac_change", "ALERT: HMAC changed unexpectedly!");
+    terminal.println("[CRITICAL] HMAC mismatch detected!");
+    terminal.flush();
+    Blynk.virtualWrite(V4, 1); // This turns the '0' into a '1' on your screen
+    notifSent = true;
+  } else {
+    Blynk.virtualWrite(V4, 0);
+    notifSent = false;
+  }
+  lastHash = hmacHex;
+
+  // Publish to Blynk
+  Blynk.virtualWrite(V0, data);
+  Blynk.virtualWrite(V1, hmacHex);
+  Blynk.virtualWrite(V2, uptimeSec);   // Automation watches this
+
+  // Terminal log
+  terminal.print("[" + String(uptimeSec) + "s] ");
+  terminal.println(hmacHex.substring(0, 16) + "...");
+  terminal.flush();
+
+  delay(5000);
+}```
 
